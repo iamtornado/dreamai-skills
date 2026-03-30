@@ -15,6 +15,9 @@ dreamai-skills/
 ├─ dreamai-himalaya/
 │  ├─ SKILL.md
 │  └─ references/
+├─ dreamai-wenyan-cli/
+│  ├─ SKILL.md
+│  └─ references/
 └─ README.md
 ```
 
