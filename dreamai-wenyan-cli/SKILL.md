@@ -31,7 +31,7 @@ metadata:
 1. **目标**：用户要「只预览 HTML」还是「发布草稿」？是否已声明使用 `--server`？
 2. **凭证**：若发布，`WECHAT_APP_ID` 与 `WECHAT_APP_SECRET` 必须在**运行命令的环境**中可用；不要在聊天中索取或回显 Secret。
 3. **网络/白名单**：本地直连时，运行环境公网 IP 通常需在公众号后台白名单；否则走 Server 模式（见 [configuration.md](references/configuration.md)）。
-4. **文稿**：`article.md` 顶部必须有合法 YAML frontmatter，且 **`title` 必填**。
+4. **文稿**：`article.md` 顶部必须有合法 YAML frontmatter，且 **`title` 必填且不超过 64 个字符**（微信公众号标题限制）。
 5. **图片**：文内相对路径图片仅在「`-f` 指向本地文件」时最可靠；详见 [configuration.md](references/configuration.md)。
 6. **失败后**：先读 CLI 报错，再查 [troubleshooting.md](references/troubleshooting.md)；需要上游参数时运行 `wenyan <command> --help`。
 
@@ -54,8 +54,8 @@ metadata:
 按顺序执行；任一步失败则停止并说明原因。
 
 1. **确认意图**：渲染预览 → 第 4 步用 `render`；发布草稿 → `publish`。
-2. **读文件**：打开用户给出的 Markdown，检查 frontmatter 是否存在且含 `title`。
-3. **必要时补全 frontmatter**：仅当用户明确要求且字段缺失时，与用户确认 `author`、`source_url`、封面等；不要编造 AppID/Secret。
+2. **读文件**：打开用户给出的 Markdown，检查 frontmatter 是否存在且含 `title`（并确认标题长度 <= 64）。
+3. **必要时补全 frontmatter**：仅当用户明确要求且字段缺失时，与用户确认 `author`、`source_url`、封面等；若 `title` 超过 64 字符先提示并建议缩短；不要编造 AppID/Secret。
 4. **选择命令**（本地文件优先）：
 
    ```bash
@@ -94,7 +94,7 @@ metadata:
 
 ## 文章格式（Frontmatter）
 
-发布前 Markdown **须** 以 YAML frontmatter 开头（`title` 必填）；字段表与封面规则见 [configuration.md](references/configuration.md)。
+发布前 Markdown **须** 以 YAML frontmatter 开头（`title` 必填，且不超过 64 个字符）；字段表与封面规则见 [configuration.md](references/configuration.md)。
 
 ```yaml
 ---
