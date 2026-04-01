@@ -1,0 +1,20 @@
+{
+  "catalogVersion": 1,
+  "specification": "https://agentskills.io/specification",
+  "skills": [
+    {
+      "directory": "dreamai-himalaya",
+      "name": "himalaya",
+      "description": "CLI to manage emails via IMAP/SMTP. Use himalaya to list, read, write, reply, forward, search, and organize emails from the terminal. Supports multiple accounts and message composition with MML (MIME Meta Language).",
+      "upstream": "https://github.com/pimalaya/himalaya",
+      "skillFile": "dreamai-himalaya/SKILL.md"
+    },
+    {
+      "directory": "dreamai-wenyan-cli",
+      "name": "dreamai-wenyan-cli",
+      "description": "Wenyan CLI (@wenyan-md/cli, command wenyan): render Markdown for WeChat Official Account layout and publish to the draft box. Use for WeChat OA drafts, HTML preview, themes, Server-mode or CI. Requires Node/npm; WECHAT_APP_ID and WECHAT_APP_SECRET for publish; IP allowlist or Wenyan Server unless using --server.",
+      "upstream": "https://github.com/caol64/wenyan-cli",
+      "skillFile": "dreamai-wenyan-cli/SKILL.md"
+    }
+  ]
+}

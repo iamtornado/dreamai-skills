@@ -5,7 +5,7 @@ description: >-
   Triggers: 微信公众号草稿、排版预览、wenyan 安装与报错排查、--server 远程发布。
   Requires: Node/npm; env WECHAT_APP_ID and WECHAT_APP_SECRET for publish; IP whitelist or Wenyan Server unless using Server mode.
   Do not use: generic Markdown/HTML conversion with no WeChat/Wenyan context unless the user explicitly names Wenyan or WeChat OA publishing.
-compatibility: Requires Node.js and npm; binary `wenyan` on PATH; outbound HTTPS. For WeChat draft publish, set WECHAT_APP_ID and WECHAT_APP_SECRET in the same environment as the CLI; public IP usually must be on the OA IP allowlist unless using Wenyan Server (--server, --api-key).
+compatibility: Requires Node.js and npm; binary `wenyan` on PATH; outbound HTTPS. For WeChat draft publish, set WECHAT_APP_ID and WECHAT_APP_SECRET in the same environment as the CLI; public IP usually must be on the OA IP allowlist unless using Wenyan Server (--server, --api-key). WeChat draft_add API limits include title max 32 字 and author max 16 字 (see official draft_add docs).
 allowed-tools: Bash(npm:*) Bash(node:*) Bash(wenyan:*)
 metadata:
   upstream-repo: "https://github.com/caol64/wenyan-cli"
@@ -31,7 +31,7 @@ metadata:
 1. **目标**：用户要「只预览 HTML」还是「发布草稿」？是否已声明使用 `--server`？
 2. **凭证**：若发布，`WECHAT_APP_ID` 与 `WECHAT_APP_SECRET` 必须在**运行命令的环境**中可用；不要在聊天中索取或回显 Secret。
 3. **网络/白名单**：本地直连时，运行环境公网 IP 通常需在公众号后台白名单；否则走 Server 模式（见 [configuration.md](references/configuration.md)）。
-4. **文稿**：`article.md` 顶部必须有合法 YAML frontmatter，且 **`title` 必填且不超过 64 个字符**（微信公众号标题限制）。
+4. **文稿**：`article.md` 顶部必须有合法 YAML frontmatter，且 **`title` 必填**；标题长度须符合微信 **[新增草稿](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html)**：`title` **不超过 32 个字**（`author` 若填写则不超过 16 个字）。详见 [configuration.md](references/configuration.md)。
 5. **图片**：文内相对路径图片仅在「`-f` 指向本地文件」时最可靠；详见 [configuration.md](references/configuration.md)。
 6. **失败后**：先读 CLI 报错，再查 [troubleshooting.md](references/troubleshooting.md)；需要上游参数时运行 `wenyan <command> --help`。
 
@@ -54,8 +54,8 @@ metadata:
 按顺序执行；任一步失败则停止并说明原因。
 
 1. **确认意图**：渲染预览 → 第 4 步用 `render`；发布草稿 → `publish`。
-2. **读文件**：打开用户给出的 Markdown，检查 frontmatter 是否存在且含 `title`（并确认标题长度 <= 64）。
-3. **必要时补全 frontmatter**：仅当用户明确要求且字段缺失时，与用户确认 `author`、`source_url`、封面等；若 `title` 超过 64 字符先提示并建议缩短；不要编造 AppID/Secret。
+2. **读文件**：打开用户给出的 Markdown，检查 frontmatter 是否存在且含 `title`（并确认 **`title` ≤ 32 个字**、**`author`（若有）≤ 16 个字**、`source_url` 长度在接口 1 KB 限制内）。
+3. **必要时补全 frontmatter**：仅当用户明确要求且字段缺失时，与用户确认 `author`、`source_url`、封面等；若 `title` / `author` 超长先提示按微信接口缩短；不要编造 AppID/Secret。
 4. **选择命令**（本地文件优先）：
 
    ```bash
@@ -94,7 +94,7 @@ metadata:
 
 ## 文章格式（Frontmatter）
 
-发布前 Markdown **须** 以 YAML frontmatter 开头（`title` 必填，且不超过 64 个字符）；字段表与封面规则见 [configuration.md](references/configuration.md)。
+发布前 Markdown **须** 以 YAML frontmatter 开头（`title` 必填，且符合微信草稿接口 **≤32 字** 等限制）；字段表、封面与正文/HTML 限制见 [configuration.md](references/configuration.md)。
 
 ```yaml
 ---
@@ -145,3 +145,4 @@ author: demo
 - 2026-03-30：初始化 skill。
 - 2026-03-30：增强 Agent 导向结构（速查、黄金路径、输出规范、`troubleshooting` 参考）。
 - 2026-03-30：按 Agent Skills 规范收紧 frontmatter（`compatibility`、`allowed-tools`、字符串 `metadata`）；移除非规范 `homepage`；`references` 改为规范链接；Openclaw 迁入 `references/openclaw.md`。
+- 2026-03-30：按微信开放平台 [新增草稿 draft_add](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html) 校正标题等字段上限（`title` 32 字、`author` 16 字等），替换此前不准确的「64 字符」表述。

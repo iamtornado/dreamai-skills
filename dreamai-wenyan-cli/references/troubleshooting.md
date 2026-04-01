@@ -17,7 +17,10 @@
 | 症状 | 可能原因 | Agent 建议动作 |
 | ---- | -------- | -------------- |
 | 提示缺少标题或解析失败 | 无 frontmatter 或缺 `title` | 在文首补充合法 YAML，`title` 必填 |
-| 标题相关校验失败、发布被拒或标题被截断 | `title` 超过平台限制（微信公众号常见为 64 字符） | 先将 `title` 缩短到 64 字符以内，再重新发布 |
+| 标题相关校验失败、发布被拒或标题被截断 | `title` 超过微信 **[新增草稿](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html)** 限制（**不超过 32 个字**） | 将 `title` 缩短到 32 字以内；勿用 `\uXXXX` 形式拼标题 |
+| 作者或摘要报错 | `author` 超过 **16 个字**，或 `digest` 超过 **128 个字**（单图文） | 按官方字段说明缩短 |
+| 正文图片在公众号里不显示 | 接口要求正文内图片 URL 须来自微信素材上传接口；**外部 URL 会被过滤** | 依赖文颜将图片上传为素材；避免指望未走微信上传的外部图 URL 原样生效 |
+| `content_source_url` 相关错误 | 原文链接超过 **1 KB** | 缩短 `source_url` 或使用短链（注意合规） |
 | 封面不符合预期 | `cover` 缺省、路径错误或微信拒收 | 对照 `configuration.md` 检查路径与格式 |
 
 ## 安装与环境
