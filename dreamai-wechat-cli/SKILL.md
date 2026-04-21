@@ -1,8 +1,8 @@
 ---
 name: dreamai-wechat-cli
 description: >-
-  DreamAI fork of Wenyan CLI (@tornadoami/dreamai-wechat-cli, command `dreamai-wechat-cli`): WeChat Official Account Markdown layout, publish to draft box, draft-box REST-style APIs via `draft`, and optional `serve` HTTP mode. Use when the user names DreamAI wechat CLI, @tornadoami/dreamai-wechat-cli, draft subcommands, or wants WeChat OA publishing outside upstream `wenyan`.
-  Triggers: dreamai-wechat-cli、微信公众号草稿、draft count/list/get、serve 远程发布、--debug 排查。
+  DreamAI fork of Wenyan CLI (@tornadoami/dreamai-wechat-cli, command `dreamai-wechat-cli`): WeChat Official Account Markdown layout, publish to draft box, advanced mass-send (`mass sendall`), draft-box REST-style APIs via `draft` (including `merge-add`), self-update (`update`), and optional `serve` HTTP mode. Use when the user names DreamAI wechat CLI, @tornadoami/dreamai-wechat-cli, draft/mass/update subcommands, or wants WeChat OA publishing outside upstream `wenyan`.
+  Triggers: dreamai-wechat-cli、微信公众号草稿、mass 群发、draft merge-add、update 升级、serve 远程发布、--debug 排查。
   Requires: Node/npm; env WECHAT_APP_ID and WECHAT_APP_SECRET for publish; IP whitelist or compatible Server unless using --server.
   Do not use: upstream-only `wenyan` / `@wenyan-md/cli` workflows unless the user explicitly wants that package; then prefer the `dreamai-wenyan-cli` skill.
 compatibility: Requires Node.js 18+ and npm; binary `dreamai-wechat-cli` on PATH; outbound HTTPS. For WeChat draft publish, set WECHAT_APP_ID and WECHAT_APP_SECRET in the same environment as the CLI; public IP usually must be on the OA IP allowlist unless using Server mode (--server, --api-key). WeChat draft_add API limits include title max 32 字 and author max 16 字 (see official draft_add docs).
@@ -15,7 +15,7 @@ metadata:
 
 # DreamAI 微信公众号 CLI（dreamai-wechat-cli）
 
-[dreamai-wechat-cli](https://github.com/iamtornado/dreamai-wechat-cli) 是上游 [wenyan-cli](https://github.com/caol64/wenyan-cli) 的 **DreamAI 维护分支**：npm 包 **`@tornadoami/dreamai-wechat-cli`**，全局命令 **`dreamai-wechat-cli`**（与上游全局命令 `wenyan` 不同）。侧重公众号排版、草稿发布，并扩展 **`draft` 子命令**与 **`serve` HTTP 服务**。
+[dreamai-wechat-cli](https://github.com/iamtornado/dreamai-wechat-cli) 是上游 [wenyan-cli](https://github.com/caol64/wenyan-cli) 的 **DreamAI 维护分支**：npm 包 **`@tornadoami/dreamai-wechat-cli`**，全局命令 **`dreamai-wechat-cli`**（与上游全局命令 `wenyan` 不同）。侧重公众号排版与草稿发布，并扩展 **`draft` 子命令（含 `merge-add`）**、**`mass sendall`**、**`update`** 与 **`serve` HTTP 服务**。
 
 本 Skill 面向 **AI Agent**：优先 **速查清单** 与 **黄金路径**；细则见 `references/`。
 
@@ -29,7 +29,7 @@ metadata:
 
 ## Agent 速查（执行前读一遍）
 
-1. **目标**：仅预览 HTML → `render`；发草稿 → `publish`；管理草稿 API → `draft …`；自建 HTTP 入口 → `serve`（见仓库 [docs/server.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/server.md)）。
+1. **目标**：仅预览 HTML → `render`；发草稿 → `publish`；草稿查询/维护 → `draft …`；多草稿合并 → `draft merge-add …`；群发 → `mass sendall …`；升级 CLI → `update`；自建 HTTP 入口 → `serve`。
 2. **凭证**：发布或调草稿 API 时，`WECHAT_APP_ID` 与 `WECHAT_APP_SECRET` 须在**运行命令的环境**中可用；不要在聊天中索取或回显 Secret。
 3. **网络/白名单**：本地直连时，出口 IP 通常需在公众号后台白名单；否则走 `--server` + API Key（见 [configuration.md](references/configuration.md)）。
 4. **文稿**：Markdown 顶部需合法 YAML frontmatter，**`title` 必填**；**`title` ≤ 32 个字**、**`author`（若有）≤ 16 个字**；`source_url` 等限制同微信草稿接口。详见 [configuration.md](references/configuration.md)。
@@ -81,7 +81,9 @@ metadata:
    dreamai-wechat-cli draft --help
    ```
 
-7. **汇报**：按 **Agent 输出规范**；勿粘贴 Secret。
+7. **群发**：认证号与接口权限、IP 白名单、`media_id` 来源都要先确认；优先参考仓库 [docs/mass.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/mass.md) 与 [docs/draft-merge.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/draft-merge.md)。
+8. **升级**：版本相关问题先 `dreamai-wechat-cli update --check`，需要非交互升级时用 `--yes`。
+9. **汇报**：按 **Agent 输出规范**；勿粘贴 Secret。
 
 ## 命令与输入方式（简表）
 
@@ -90,10 +92,12 @@ metadata:
 | 发布草稿 | `dreamai-wechat-cli publish -f <path-or-url-or-inline>` |
 | 仅渲染 | `dreamai-wechat-cli render -f <…>` |
 | 主题 | `dreamai-wechat-cli theme`（`--help` 为准） |
-| 草稿箱 API | `dreamai-wechat-cli draft <subcommand> …` |
+| 草稿箱 API | `dreamai-wechat-cli draft <subcommand> …`（含 `merge-add`） |
+| 群发 | `dreamai-wechat-cli mass sendall --media-id <id> [--tag-id <n>]` |
+| CLI 升级 | `dreamai-wechat-cli update [--check\|--yes\|--to <version>]` |
 | HTTP Server | `dreamai-wechat-cli serve`（见仓库 docs） |
 
-仓库文档索引：[publish](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/publish.md)、[theme](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/theme.md)、[server](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/server.md)。
+仓库文档索引：[publish](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/publish.md)、[theme](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/theme.md)、[mass](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/mass.md)、[draft-merge](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/draft-merge.md)、[update](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/update.md)、[server](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/server.md)。
 
 | 输入方式 | 示例 | Agent 注意 |
 | -------- | ---- | ---------- |
@@ -130,3 +134,4 @@ source_url: https://example.com/original
 ## 维护记录
 
 - 2026-04-09：初始化 skill（对齐 dreamai-wechat-cli 仓库与 npm 包名）。
+- 2026-04-21：同步 CLI 新增能力（`mass sendall`、`draft merge-add`、`update`）并更新命令速查。

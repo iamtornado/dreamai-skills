@@ -1,6 +1,6 @@
 # dreamai-wechat-cli：配置与发布前置条件
 
-本文档补充环境、微信侧限制、Server 模式，以及本 fork 特有的 **`draft` / `serve`** 提示。
+本文档补充环境、微信侧限制、Server 模式，以及本 fork 特有的 **`draft` / `mass` / `update` / `serve`** 提示。
 
 **相关**：按报错排查见 [`troubleshooting.md`](troubleshooting.md)。
 
@@ -52,7 +52,38 @@
 
 ## `draft` 子命令
 
-本 fork 提供与草稿箱字段对齐的 **`dreamai-wechat-cli draft`** 子命令（如 count、list、get、update、delete、add 等，以 `dreamai-wechat-cli draft --help` 为准）。Agent 在不确定参数名时**必须先 `--help`**，避免臆造 media_id 或 JSON 字段。
+本 fork 提供与草稿箱字段对齐的 **`dreamai-wechat-cli draft`** 子命令（如 count、list、get、update、delete、add、merge-add 等，以 `dreamai-wechat-cli draft --help` 为准）。Agent 在不确定参数名时**必须先 `--help`**，避免臆造 media_id 或 JSON 字段。
+
+`merge-add` 用于把多篇草稿按顺序拼成一篇新的多图文草稿；可选 `--sendall`（合并后立即群发）和 `--delete-sources`（成功后删除源草稿）。详情见仓库 [docs/draft-merge.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/draft-merge.md)。
+
+## `mass` 子命令（高级群发）
+
+`dreamai-wechat-cli mass sendall --media-id <id>` 封装微信 `message/mass/sendall` 的 `mpnews` 场景，支持全员或 `--tag-id` 按标签群发。
+
+常见前提：
+
+- 公众号具备官方文档要求的群发接口权限（通常需认证号，依微信后台为准）。
+- 调用机器出口 IP 在公众号白名单内（本地直连时）。
+- 群发为异步任务，成功返回仅代表任务已提交；最终结果需看微信回执机制。
+
+详情见仓库 [docs/mass.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/mass.md)。
+
+## `update` 子命令（CLI 自更新）
+
+`update` 用于升级全局安装的 CLI：
+
+```bash
+dreamai-wechat-cli update --check
+dreamai-wechat-cli update
+dreamai-wechat-cli update --yes
+dreamai-wechat-cli update --to <version-or-dist-tag>
+```
+
+说明：
+
+- 内部会执行 `npm install -g @tornadoami/dreamai-wechat-cli@<target>`。
+- 在 CI/非交互环境建议用 `--yes`。
+- 升级后建议新开终端并验证 `dreamai-wechat-cli --version`。
 
 ## `serve` 模式
 
