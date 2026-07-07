@@ -18,6 +18,9 @@ dreamai-skills/
 ├─ dreamai-wenyan-cli/
 │  ├─ SKILL.md
 │  └─ references/
+├─ dreamai-wechat-cli/
+│  ├─ SKILL.md
+│  └─ references/
 └─ README.md
 ```
 

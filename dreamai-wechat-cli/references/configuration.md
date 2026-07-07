@@ -45,6 +45,32 @@
 
 若本地 `render` 正常但 `publish` 失败，应对照微信返回错误与官方文档。
 
+## `newspic` 子命令（贴图草稿）
+
+**v2.1.0+** 提供 **`dreamai-wechat-cli newspic publish`**：按官方 **[draft/add](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html)** 创建 **`article_type=newspic`** 草稿（图片/文字贴图），并经由 **[material/add_material](https://developers.weixin.qq.com/doc/subscription/api/material/permanent/api_addmaterial.html)** 上传永久图片素材。
+
+| 要点 | 说明 |
+| ---- | ---- |
+| 与 `publish` 区别 | `publish` → 图文 `news`（Markdown→HTML）；`newspic publish` → 多图贴图，**不用 Markdown** |
+| 仅进草稿箱 | 本命令**不群发**；后台「草稿箱」查看 |
+| 标题 | 官方 draft 字段上限 32 字；**贴图 UI 建议 ≤20 字**（默认 `--max-title-chars 20`） |
+| 描述 | 对应 JSON 字段 `content`（纯文本，非 HTML） |
+| 图片 | `image_info.image_list[].image_media_id`，须为**永久素材** ID；最多 **20** 张 |
+| 目录模式 | `--from-dir <dir>`：读 `wechat_post.json`（`title`、`description`）+ 有序 `panel_*.png`（或其它约定文件名） |
+| 手动模式 | `--title`、`--content`、`--image`（可重复）或 `--images-dir` |
+| 凭证 | `--app-id` / `--app-secret` 或 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` |
+
+示例：
+
+```bash
+dreamai-wechat-cli newspic publish --from-dir /path/to/post_bundle
+dreamai-wechat-cli newspic publish --title "标题" --content "描述" --image a.png --image b.png
+```
+
+详情见仓库 [docs/newspic.md](https://github.com/iamtornado/dreamai-wechat-cli/blob/main/docs/newspic.md)。
+
+**下游集成**：调用方应执行 **npm 全局安装的** `dreamai-wechat-cli`，勿 `node …/dist/cli.js` 指向源码；升级：`dreamai-wechat-cli update --yes`。
+
 ## 正文与图片路径
 
 - **本地绝对路径**与 **HTTPS 图片 URL** 一般由 CLI 按微信要求上传素材。

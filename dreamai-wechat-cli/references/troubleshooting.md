@@ -23,6 +23,16 @@
 | `source_url` 错误 | 超过 **约 1 KB** | 缩短或使用短链（注意合规） |
 | 封面问题 | `cover` 缺失、路径错误或拒收 | 对照 `configuration.md` |
 
+## `newspic` 贴图
+
+| 症状 | 可能原因 | Agent 建议动作 |
+| ---- | -------- | -------------- |
+| `newspic` 子命令不存在 | CLI 版本 < 2.1.0 | `dreamai-wechat-cli update --yes` 或 `npm install -g @tornadoami/dreamai-wechat-cli@latest` |
+| `40007 invalid media_id` | 图片未上传为**永久素材**，或 ID 字段名错误 | 使用 `newspic publish`（内部走 `add_material`）；勿手写 `media_id` 混用临时素材 |
+| `53401` 封面/裁剪相关 | 勿传无效 `cover_info` | 使用 CLI 默认 payload；升级至 ≥2.1.0 |
+| 标题过长 | 贴图 UI 限制 | `--max-title-chars 20` |
+| 找不到 CLI（systemd/定时任务） | PATH 未含 `~/.npm-global/bin` | 全局安装 CLI 并确保服务 `PATH` 含 npm global bin |
+
 ## `draft` / `serve`
 
 | 症状 | 可能原因 | Agent 建议动作 |

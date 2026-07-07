@@ -15,6 +15,13 @@
       "description": "Wenyan CLI (@wenyan-md/cli, command wenyan): render Markdown for WeChat Official Account layout and publish to the draft box. Use for WeChat OA drafts, HTML preview, themes, Server-mode or CI. Requires Node/npm; WECHAT_APP_ID and WECHAT_APP_SECRET for publish; IP allowlist or Wenyan Server unless using --server.",
       "upstream": "https://github.com/caol64/wenyan-cli",
       "skillFile": "dreamai-wenyan-cli/SKILL.md"
+    },
+    {
+      "directory": "dreamai-wechat-cli",
+      "name": "dreamai-wechat-cli",
+      "description": "DreamAI fork (@tornadoami/dreamai-wechat-cli): WeChat OA Markdown publish, newspic image-post drafts, draft/mass/update/serve. Requires Node/npm; WECHAT_APP_ID and WECHAT_APP_SECRET; IP allowlist or Server mode unless using --server.",
+      "upstream": "https://github.com/iamtornado/dreamai-wechat-cli",
+      "skillFile": "dreamai-wechat-cli/SKILL.md"
     }
   ]
 }
