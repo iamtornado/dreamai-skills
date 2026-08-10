@@ -9,6 +9,7 @@
 5. Preview and download
 6. Validate and troubleshoot
 7. Convert EPUB for AI agents
+8. Write and validate work metadata
 
 ## 1. Platform and installation
 
@@ -103,8 +104,10 @@ Prefer `epub` as the canonical source for subsequent Markdown conversion.
 Preview without `curl` or `jq`:
 
 ```text
-PYTHON scripts/tomato_web.py preview "BOOK_ID_OR_PAGE_OR_READER_URL"
+PYTHON scripts/tomato_web.py preview "BOOK_ID_OR_PAGE_OR_READER_URL" --output WORK_ROOT/source/BOOK_ID/preview.json
 ```
+
+The saved preview is an evidence snapshot containing the exact input, capture time, and live preview response. Keep it beside `status.json` and `downloaded_chapters.jsonl`.
 
 Create a full-book job and wait for completion:
 
@@ -160,3 +163,21 @@ PYTHON scripts/epub_to_markdown.py ABSOLUTE_STORY_EPUB --type story --output ABS
 ```
 
 The long-novel output directory must be absent or empty to prevent accidental overwrites. For a short-story file, pass `--overwrite` only when replacing that exact Markdown output is intended.
+
+## 8. Write and validate work metadata
+
+After EPUB validation and Markdown conversion, write one `metadata.json` at the work root. Use the same schema for novels and short stories:
+
+```text
+PYTHON scripts/write_work_metadata.py --type novel --source-url SOURCE_URL --preview-json WORK_ROOT/source/BOOK_ID/preview.json --status-json WORK_ROOT/source/BOOK_ID/status.json --epub WORK_ROOT/source/BOOK.epub --markdown WORK_ROOT/markdown --output WORK_ROOT/metadata.json
+```
+
+For a short story, use `--type story` and pass its single Markdown file to `--markdown`. The metadata records the exact source URL, canonical `/page/<Book ID>` URL, platform word count, chapter count, title history when available, author, tags, timestamps, cache counts, portable relative artifact paths, and SHA-256 hashes.
+
+Immediately validate the written file:
+
+```text
+PYTHON scripts/write_work_metadata.py --check WORK_ROOT/metadata.json
+```
+
+`--check` re-reads preview and cache JSON, validates the EPUB again, verifies novel chapter continuity or the short-story file, and compares stored hashes. If any artifact changes, regenerate with the original arguments plus `--overwrite`, then rerun `--check`.

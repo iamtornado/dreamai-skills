@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 from resolve_book_id import resolve
@@ -205,6 +206,19 @@ def command_preview(args: argparse.Namespace) -> int:
     result = make_client(args).request(
         "GET", f"/api/preview/{urllib.parse.quote(book_id, safe='')}"
     )
+    if args.output:
+        output = args.output.expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        snapshot = {
+            "schema_version": 1,
+            "source_input": args.input.strip(),
+            "captured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "preview": result,
+        }
+        output.write_text(
+            json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     print_json(result)
     return 0
 
@@ -313,6 +327,7 @@ def parse_args() -> argparse.Namespace:
     preview = subparsers.add_parser("preview", help="预览 Book ID 或番茄链接")
     add_api_options(preview)
     preview.add_argument("input")
+    preview.add_argument("--output", type=Path, help="保存带原始输入和采集时间的预览 JSON")
     preview.set_defaults(func=command_preview)
 
     jobs = subparsers.add_parser("jobs", help="列出下载任务")

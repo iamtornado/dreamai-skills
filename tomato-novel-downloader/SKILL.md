@@ -1,6 +1,6 @@
 ---
 name: tomato-novel-downloader
-description: Install, run, automate, and troubleshoot zhongbai2333/Tomato-Novel-Downloader on native Windows or Linux; download Fanqie/Tomato novels and short stories; and convert validated EPUB files into AI-friendly Markdown. Use when a user provides a fanqienovel.com page/reader/share URL or Book ID; asks to download or update a book, resolve a reader item ID, choose or validate an output format, make chapter-per-file Markdown for a long novel, make one Markdown file for a short story, run the Web UI, migrate the skill between Windows and Linux, or diagnose IID/proxy/API failures. 中文触发：番茄小说下载、短故事下载、Windows/Linux 跨平台、reader 转 Book ID、长篇分章 Markdown、短故事单个 Markdown、下载完整性检查。
+description: Install, run, automate, and troubleshoot zhongbai2333/Tomato-Novel-Downloader on native Windows or Linux; download Fanqie/Tomato novels and short stories; convert validated EPUB files into AI-friendly Markdown; and write or verify unified work metadata. Use when a user provides a fanqienovel.com page/reader/share URL or Book ID; asks to download or update a book, resolve a reader item ID, choose or validate an output format, make chapter-per-file Markdown for a long novel, make one Markdown file for a short story, preserve source URL and word count, run the Web UI, migrate the skill between Windows and Linux, or diagnose IID/proxy/API failures. 中文触发：番茄小说下载、短故事下载、Windows/Linux 跨平台、reader 转 Book ID、长篇分章 Markdown、短故事单个 Markdown、作品元数据、原始 URL、总字数、下载完整性检查。
 ---
 
 # Tomato Novel Downloader
@@ -17,8 +17,9 @@ Use the upstream release binary from <https://github.com/zhongbai2333/Tomato-Nov
 3. Install or update the official release binary only when needed. Run `scripts/install_release.py --output <absolute-binary-path>`; it selects Linux/Windows and x64/ARM64, verifies the GitHub Release SHA-256 digest, and adds `.exe` on Windows.
 4. Read `references/workflow.md` before starting a server, automating its HTTP API, changing format, or diagnosing a failure. Use `scripts/tomato_web.py`; do not rewrite its operations as Bash-only `env -u` or `curl | jq` commands.
 5. Start the downloader through `tomato_web.py serve`. It removes proxy variables only from the child process because IID registration needs direct access to `log.snssdk.com`; a proxy can make directory preview succeed through web fallback while正文 download still fails.
-6. Validate the produced output with `scripts/verify_output.py`. Never treat Web UI job state `done` alone as proof of success.
+6. Save the preview evidence with `tomato_web.py preview ... --output <work-root>/source/<book-id>/preview.json`, then validate the produced EPUB with `scripts/verify_output.py`. Never treat Web UI job state `done` alone as proof of success.
 7. For AI-agent reading, download and validate EPUB first, then run `scripts/epub_to_markdown.py`. Use `--type novel` for a long novel and `--type story` for a short story; never infer the type from chapter count.
+8. Run `scripts/write_work_metadata.py` after validation and conversion to create `<work-root>/metadata.json`, then run it again with `--check`. Preserve the exact input URL, canonical page URL, platform word count, verified chapter counts, artifact paths, and hashes.
 
 ## Output selection
 
@@ -51,6 +52,17 @@ Long-novel output contains `0000_书籍信息.md`, `目录.md`, and numbered cha
 
 Choose the type from the user's intent or original input context: normally `/page/` is a long-novel workflow and `/reader/` is a short-story workflow. If the distinction is unknown, ask; do not guess from how many EPUB documents exist. Do not use upstream split-TXT mode as the source for Markdown when a valid EPUB is available.
 
+## Unified work metadata
+
+Keep one `metadata.json` at the root of every downloaded work, regardless of whether it is a novel or short story. Generate it only after EPUB validation and Markdown conversion:
+
+```text
+PYTHON scripts/write_work_metadata.py --type novel --source-url SOURCE_URL --preview-json PREVIEW_JSON --status-json STATUS_JSON --epub BOOK_EPUB --markdown MARKDOWN_OUTPUT --output WORK_ROOT/metadata.json
+PYTHON scripts/write_work_metadata.py --check WORK_ROOT/metadata.json
+```
+
+The writer cross-checks preview, cache, EPUB, and Markdown evidence. It refuses mismatched Book IDs, titles, authors, word/chapter counts, incomplete caches, corrupt EPUBs, non-contiguous novel chapters, failure markers, paths outside the work root, and accidental metadata overwrite. Use `--overwrite` only to refresh the exact work metadata after its artifacts change.
+
 ## Platform rules
 
 - Treat this as a project-scoped skill by default. Copy the complete folder to `<PROJECT_ROOT>/.agents/skills/tomato-novel-downloader`; Codex discovers it when launched from that repository or a descendant directory.
@@ -66,6 +78,7 @@ Choose the type from the user's intent or original input context: normally `/pag
 - EPUB: require a valid ZIP container, no failing member, and the expected number of `OEBPS/chapter_*.xhtml` files.
 - Split TXT: require the expected chapter count excluding `0000_书籍信息.txt`, no empty chapter file, and no `[本章下载失败]` marker.
 - Cache: when available, check `status.json` downloaded entries against the directory chapter count.
+- Metadata: require `metadata.json` to pass `write_work_metadata.py --check`; treat `word_count` as the platform-reported value and preserve its evidence source rather than recomputing it from Markdown characters.
 - If a short story succeeds as EPUB but split TXT contains `[本章下载失败]`, report the split-mode upstream `register_key` failure; retain the valid EPUB and do not call the split download successful.
 
 Example:
