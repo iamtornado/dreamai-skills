@@ -1,0 +1,4 @@
+interface:
+  display_name: "番茄小说下载器"
+  short_description: "在 Windows/Linux 下载番茄小说并转换为 AI 可读 Markdown"
+  default_prompt: "使用 $tomato-novel-downloader 在当前 Windows 或 Linux 系统下载并验证番茄小说，长篇转为分章 Markdown，短故事转为单个 Markdown。"
