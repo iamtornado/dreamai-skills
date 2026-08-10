@@ -9,7 +9,7 @@ Use the upstream release binary from <https://github.com/zhongbai2333/Tomato-Nov
 
 ## Required workflow
 
-1. Confirm the user is authorized to download the requested material and choose a persistent output directory. Keep test artifacts temporary unless the user asks to retain them.
+1. Choose a persistent output directory. Keep test artifacts temporary unless the user asks to retain them.
 2. Normalize the input:
    - Plain numeric input and `/page/<id>` URLs contain a Book ID.
    - `/reader/<itemId>` contains a chapter/item ID, not a Book ID. Run `scripts/resolve_book_id.py '<URL>'` to extract the page's embedded Book ID.
