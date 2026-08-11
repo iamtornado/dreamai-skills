@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze a video with mcp-video-analyzer for speech and PaddleOCR for visuals."""
+"""Analyze a video with faster-whisper for speech and PaddleOCR for visuals."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from statistics import fmean
 from typing import Any
+
+from transcribe_with_faster_whisper import DEFAULT_MODEL, transcribe_video
 
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -187,6 +189,78 @@ def analyzer_brief(video: Path, args: argparse.Namespace) -> dict[str, Any]:
         detail = getattr(error, "stderr", None) or str(error)
         log(f"[speech] Analyzer degraded to metadata-only output: {detail.strip()}")
         return {"metadata": probe_video(video), "transcript": [], "warnings": [str(detail).strip()]}
+
+
+def whisper_device(paddle_device: str) -> tuple[str, int]:
+    """Map Paddle's gpu:N device syntax to faster-whisper's CUDA arguments."""
+    if not paddle_device.startswith("gpu"):
+        return "cpu", 0
+    match = re.fullmatch(r"gpu(?::(\d+))?", paddle_device)
+    if not match:
+        raise ValueError(f"Cannot map Paddle device to a CUDA index: {paddle_device}")
+    return "cuda", int(match.group(1) or 0)
+
+
+def transcribe_speech(video: Path, output_dir: Path, args: argparse.Namespace) -> dict[str, Any]:
+    if args.speech_backend == "analyzer":
+        analysis = analyzer_brief(video, args)
+        analysis["speech"] = {
+            "backend": "analyzer",
+            "requestedBackend": args.speech_backend,
+            "model": args.model,
+        }
+        return analysis
+
+    try:
+        device, device_index = whisper_device(args.device)
+        local = transcribe_video(
+            video,
+            output_dir,
+            model=args.model,
+            model_source=args.model_source,
+            language=args.language,
+            device=device,
+            device_index=device_index,
+            compute_type=args.whisper_compute_type,
+            batch_size=args.whisper_batch_size,
+            beam_size=args.whisper_beam_size,
+            hotwords=args.hotwords,
+            force_refresh=args.force_refresh,
+        )
+        model_metadata = {
+            key: value for key, value in local["payload"].items() if key != "segments"
+        }
+        return {
+            "metadata": probe_video(video),
+            "transcript": local["transcript"],
+            "warnings": [],
+            "speech": {
+                "backend": "faster-whisper",
+                "requestedBackend": args.speech_backend,
+                "cached": local["cached"],
+                **model_metadata,
+            },
+            "artifacts": {
+                "transcriptVtt": local["vttPath"],
+                "transcriptJson": local["jsonPath"],
+            },
+        }
+    except Exception as error:
+        detail = str(error).strip() or type(error).__name__
+        warning = (
+            f"faster-whisper ({args.model}) failed; fell back to mcp-video-analyzer: {detail}"
+        )
+        log(f"[speech] {warning}")
+        analysis = analyzer_brief(video, args)
+        analysis["warnings"] = [warning, *(analysis.get("warnings") or [])]
+        analysis["speech"] = {
+            "backend": "analyzer",
+            "requestedBackend": args.speech_backend,
+            "model": args.model,
+            "fallbackFrom": "faster-whisper",
+            "fallbackReason": detail,
+        }
+        return analysis
 
 
 def sample_times(duration: float, count: int) -> list[float]:
@@ -376,8 +450,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="gpu:0", help="Paddle device, e.g. gpu:0 or cpu")
     parser.add_argument("--ocr-language", default="ch", help="PaddleOCR language/model selector")
     parser.add_argument("--min-confidence", type=float, default=0.45)
-    parser.add_argument("--language", help="Forced Whisper language passed to mcp-video-analyzer")
-    parser.add_argument("--model", help="Whisper model passed to mcp-video-analyzer")
+    parser.add_argument("--language", help="Forced Whisper language")
+    parser.add_argument(
+        "--speech-backend",
+        choices=("faster-whisper", "auto", "analyzer"),
+        default="faster-whisper",
+        help="Speech backend; local faster-whisper and auto fall back to analyzer on failure",
+    )
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Whisper model name or local CT2 path")
+    parser.add_argument(
+        "--model-source",
+        choices=("modelscope", "huggingface", "auto"),
+        default="modelscope",
+        help="Download source for local faster-whisper models",
+    )
+    parser.add_argument("--whisper-compute-type", default="float16")
+    parser.add_argument("--whisper-batch-size", type=int, default=8)
+    parser.add_argument("--whisper-beam-size", type=int, default=5)
+    parser.add_argument("--hotwords", help="Terms to bias local faster-whisper recognition")
     parser.add_argument("--force-refresh", action="store_true")
     parser.add_argument("--analyzer-package", default="mcp-video-analyzer@0.8.0")
     parser.add_argument("--analyzer-timeout", type=int, default=900)
@@ -386,6 +476,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--max-frames must be between 1 and 60")
     if not 0 <= args.min_confidence <= 1:
         parser.error("--min-confidence must be between 0 and 1")
+    if args.whisper_batch_size < 1:
+        parser.error("--whisper-batch-size must be positive")
+    if args.whisper_beam_size < 1:
+        parser.error("--whisper-beam-size must be positive")
     return args
 
 
@@ -395,23 +489,36 @@ def main() -> int:
     output_dir = (args.out or Path(tempfile.gettempdir()) / "video-paddleocr" / digest).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     video, downloaded = resolve_source(args.source, output_dir)
-    analysis = analyzer_brief(video, args)
+    analysis = transcribe_speech(video, output_dir, args)
     metadata = {**probe_video(video), **(analysis.get("metadata") or {})}
     duration = float(metadata.get("duration") or 0)
     frames = extract_frames(video, output_dir, duration, args.max_frames, args.max_width)
     ocr_results = paddle_ocr(frames, args)
     transcript = analysis.get("transcript") or []
     warnings = list(analysis.get("warnings") or [])
+    speech = analysis.get("speech") or {}
     warnings.append("Visual OCR generated by PaddleOCR; mcp-video-analyzer Tesseract OCR was skipped.")
     result = {
-        "metadata": {**metadata, "ocrEngine": "PaddleOCR", "ocrDevice": args.device},
+        "metadata": {
+            **metadata,
+            "speechBackend": speech.get("backend"),
+            "speechModel": speech.get("model"),
+            "ocrEngine": "PaddleOCR",
+            "ocrDevice": args.device,
+        },
+        "speech": speech,
         "transcript": transcript,
         "frames": frames,
         "frameCount": len(frames),
         "ocrResults": ocr_results,
         "timeline": build_timeline(transcript, frames, ocr_results),
         "warnings": warnings,
-        "artifacts": {"outputDir": str(output_dir), "video": str(video), "downloaded": downloaded},
+        "artifacts": {
+            "outputDir": str(output_dir),
+            "video": str(video),
+            "downloaded": downloaded,
+            **(analysis.get("artifacts") or {}),
+        },
     }
     analysis_path = output_dir / "analysis.json"
     analysis_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

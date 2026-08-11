@@ -11,11 +11,11 @@ Analyze the given video and answer the user's question (or summarize it if no qu
 
 ## Project OCR policy — PaddleOCR
 
-For any request that needs on-screen text or a general visual analysis, use the project wrapper in `scripts/analyze_with_paddleocr.py`. It deliberately runs `mcp-video-analyzer` in `brief` mode, where Tesseract is skipped, then:
+For any request that needs on-screen text or a general visual analysis, use the project wrapper in `scripts/analyze_with_paddleocr.py`. It uses local faster-whisper for speech and keeps `mcp-video-analyzer` brief mode as a fallback, so Tesseract is skipped, then:
 
-1. samples frames uniformly across the full duration with ffmpeg;
-2. runs PaddleOCR on the original-resolution frames (GPU `gpu:0` by default);
-3. emits resized frames for the agent; and
+1. transcribes speech locally with `faster-whisper` `large-v3` by default;
+2. samples original and resized frames uniformly across the full duration with ffmpeg;
+3. runs PaddleOCR on the original-resolution frames (GPU `gpu:0` by default); and
 4. rebuilds the annotated timeline after both Whisper and PaddleOCR finish.
 
 This is a real backend replacement: do not call upstream `analyze_video`/the standard CLI first and then redundantly run PaddleOCR.
@@ -37,9 +37,11 @@ Run the full analysis:
   --max-frames 12
 ```
 
-The JSON on stdout contains `metadata`, `transcript`, `frames`, `ocrResults`, `timeline`, and `warnings`. Progress goes to stderr, and the same document is persisted as `<persistent-output-dir>/analysis.json`. Each frame has an emitted `filePath` and an OCR-resolution `originalFilePath`.
+The JSON on stdout contains `metadata`, `speech`, `transcript`, `frames`, `ocrResults`, `timeline`, `warnings`, and `artifacts`. Progress goes to stderr, and the same document is persisted as `<persistent-output-dir>/analysis.json`. Each frame has an emitted `filePath` and an OCR-resolution `originalFilePath`.
 
-Useful flags: `--device gpu:0|cpu`, `--ocr-language ch|en|...`, `--min-confidence 0.45`, `--max-frames 1..60`, `--max-width 0|<px>`, `--model <Whisper model>`, `--force-refresh`. The wrapper understands local files, `file://`, yt-dlp-supported URLs, and public Fanqie article URLs. `YTDLP_COOKIES` and `YTDLP_COOKIES_FROM_BROWSER` are honored for protected sources.
+The default speech model is `large-v3`, downloaded from ModelScope into the project-local `.cache/faster-whisper/modelscope-large-v3/` directory. Transcript artifacts are recorded as `artifacts.transcriptVtt` and `artifacts.transcriptJson`; normally these are `<video-stem>.vtt` and `<video-stem>.transcript.json`. If those names already belong to another model, a model suffix such as `.large-v3` is added instead of overwriting them. The top-level `speech` object records the model, provenance, CUDA device, inference settings, detected language, and cache status.
+
+Useful flags: `--device gpu:0|cpu`, `--ocr-language ch|en|...`, `--min-confidence 0.45`, `--max-frames 1..60`, `--max-width 0|<px>`, `--model <Whisper model>`, `--model-source modelscope|huggingface|auto`, `--whisper-compute-type float16`, `--whisper-batch-size 8`, `--whisper-beam-size 5`, `--hotwords "阿来，刘慈欣，番茄十二日谈"`, `--force-refresh`. `--speech-backend analyzer` explicitly selects the upstream speech path; the default `faster-whisper` and `auto` modes fall back to it with a warning if local transcription fails. For CPU transcription, set `--device cpu --whisper-compute-type int8`. The wrapper understands local files, `file://`, yt-dlp-supported URLs, and public Fanqie article URLs. `YTDLP_COOKIES` and `YTDLP_COOKIES_FROM_BROWSER` are honored for protected sources.
 
 ## Route A — MCP for non-OCR questions
 
@@ -70,7 +72,8 @@ Useful flags: `--detail brief|standard|detailed` (brief = metadata + transcript 
 
 ## Prerequisites & degradation
 
-- PaddleOCR route: Python 3.12 project venv, PaddlePaddle GPU, ffmpeg, Node.js 18+, and yt-dlp for web sources. The first OCR run downloads the official detection/recognition models into the skill-local `.cache/` directory.
+- PaddleOCR route: Python 3.12 project venv, PaddlePaddle GPU, faster-whisper, ffmpeg, Node.js 18+, and yt-dlp for web sources. The first run downloads the official OCR models and the default ModelScope `large-v3` transcription model into the skill-local `.cache/` directory.
+- The installer includes NVIDIA's cuBLAS and cuDNN CUDA 12 wheels. The local transcriber preloads their project-venv libraries before CTranslate2 starts, so no system-wide `LD_LIBRARY_PATH` change is required.
 - Upstream fallback: Node.js 18+; ffmpeg is bundled.
 - Platform URLs (YouTube, Instagram, TikTok, …) require `yt-dlp` on PATH; direct `.mp4/.webm/.mov` URLs and local files work without it. Loom transcript, metadata, and comments need no `yt-dlp` either. Loom **frames** usually do — Loom serves most videos as separate DASH video+audio streams that only `yt-dlp` fetches and merges; a CDN fallback covers some videos without it.
 - The upstream tool usually reports partial failures in `warnings`, but v0.8.0 can hard-exit when Tesseract language downloads fail. The PaddleOCR wrapper avoids that path. Relay any remaining warnings to the user.
