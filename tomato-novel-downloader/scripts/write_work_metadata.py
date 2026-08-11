@@ -22,6 +22,9 @@ from verify_output import FAILURE_MARKERS, validate_epub
 SCHEMA_VERSION = 1
 PAGE_HOSTS = {"fanqienovel.com", "www.fanqienovel.com"}
 CHAPTER_MARKDOWN_RE = re.compile(r"^(\d+)_.*\.md$", re.IGNORECASE)
+COUNTABLE_CHARACTER_RE = re.compile(
+    r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9]"
+)
 
 
 def utc_now() -> str:
@@ -221,6 +224,23 @@ def validate_markdown(
     }
 
 
+def count_markdown_characters(work_type: str, path: Path) -> int:
+    """Count CJK characters and ASCII letters/digits in downloaded Markdown."""
+    if work_type == "novel":
+        candidates = []
+        for item in sorted(path.glob("*.md")):
+            match = CHAPTER_MARKDOWN_RE.fullmatch(item.name)
+            if match and int(match.group(1)) != 0:
+                candidates.append(item)
+    else:
+        candidates = [path]
+    count = sum(
+        len(COUNTABLE_CHARACTER_RE.findall(item.read_text(encoding="utf-8")))
+        for item in candidates
+    )
+    return positive_int(count, "Markdown 可计数字符数")
+
+
 def preview_parts(snapshot: dict) -> tuple[dict, str | None, str | None]:
     if isinstance(snapshot.get("preview"), dict):
         return (
@@ -317,8 +337,19 @@ def build_metadata(args: argparse.Namespace) -> dict:
         "章节数", preview.get("chapter_count"), usable_status_chapter_count(status)
     )
     chapter_count = positive_int(chapter_value, "章节数")
-    word_value = choose_equal("总字数", preview.get("word_count"), status.get("word_count"))
-    word_count = positive_int(word_value, "总字数")
+    platform_word_value = choose_equal(
+        "总字数", preview.get("word_count"), status.get("word_count")
+    )
+    if platform_word_value not in (None, ""):
+        word_count = positive_int(platform_word_value, "总字数")
+        if args.compute_word_count:
+            raise ValueError("平台总字数可用时不得使用 --compute-word-count")
+        word_count_source = "preview.word_count + status.json.word_count"
+    elif args.compute_word_count:
+        word_count = count_markdown_characters(args.work_type, markdown_path)
+        word_count_source = "computed_from_markdown_countable_characters"
+    else:
+        raise ValueError("缺少平台总字数；可使用 --compute-word-count 生成透明回退值")
 
     epub_result = require_clean_epub(epub_path, chapter_count)
     markdown_result = validate_markdown(args.work_type, markdown_path, chapter_count)
@@ -336,19 +367,22 @@ def build_metadata(args: argparse.Namespace) -> dict:
             f"downloaded_chapters.jsonl 行数 {jsonl_count} != 章节数 {chapter_count}"
         )
 
-    title = str(
-        choose_equal(
-            "书名", preview.get("book_name"), status.get("book_name"), epub_metadata.get("title")
-        )
-        or ""
-    ).strip()
+    sourced_title = choose_equal(
+        "书名", preview.get("book_name"), status.get("book_name"), epub_metadata.get("title")
+    )
+    if sourced_title not in (None, "") and args.title:
+        choose_equal("书名", sourced_title, args.title)
+    title = str(sourced_title or args.title or "").strip()
     if not title:
         raise ValueError("缺少书名")
     creators = epub_metadata.get("creators") or []
     epub_author = creators[0] if isinstance(creators, list) and creators else None
-    author = str(
-        choose_equal("作者", preview.get("author"), status.get("author"), epub_author) or ""
-    ).strip()
+    sourced_author = choose_equal(
+        "作者", preview.get("author"), status.get("author"), epub_author
+    )
+    if sourced_author not in (None, "") and args.author:
+        choose_equal("作者", sourced_author, args.author)
+    author = str(sourced_author or args.author or "").strip()
     if not author:
         raise ValueError("缺少作者")
 
@@ -399,7 +433,7 @@ def build_metadata(args: argparse.Namespace) -> dict:
         "canonical_url": canonical_url,
         "chapter_count": chapter_count,
         "word_count": word_count,
-        "word_count_source": "preview.word_count + status.json.word_count",
+        "word_count_source": word_count_source,
         "finished": bool(preview.get("finished", status.get("finished", False))),
         "category": str(preview.get("category") or status.get("category") or "").strip()
         or None,
@@ -442,6 +476,10 @@ def check_metadata(path: Path) -> dict[str, object]:
         raise ValueError("book_id 必须是数字字符串")
     chapter_count = positive_int(metadata.get("chapter_count"), "chapter_count")
     positive_int(metadata.get("word_count"), "word_count")
+    if not str(metadata.get("title") or "").strip():
+        raise ValueError("metadata.json 缺少 title")
+    if not str(metadata.get("author") or "").strip():
+        raise ValueError("metadata.json 缺少 author")
     source_url, canonical_url = canonicalize_source(str(metadata.get("source_url") or ""), book_id)
     expect_equal(source_url, metadata.get("source_url"), "source_url")
     expect_equal(canonical_url, metadata.get("canonical_url"), "canonical_url")
@@ -489,8 +527,31 @@ def check_metadata(path: Path) -> dict[str, object]:
             "status chapter_count",
         )
     expect_equal(positive_int(preview.get("chapter_count"), "preview chapter_count"), chapter_count, "preview chapter_count")
-    expect_equal(positive_int(status.get("word_count"), "status word_count"), metadata.get("word_count"), "status word_count")
-    expect_equal(positive_int(preview.get("word_count"), "preview word_count"), metadata.get("word_count"), "preview word_count")
+    platform_word_value = choose_equal(
+        "总字数", preview.get("word_count"), status.get("word_count")
+    )
+    if platform_word_value not in (None, ""):
+        expect_equal(
+            positive_int(platform_word_value, "平台总字数"),
+            metadata.get("word_count"),
+            "platform word_count",
+        )
+        expect_equal(
+            metadata.get("word_count_source"),
+            "preview.word_count + status.json.word_count",
+            "word_count_source",
+        )
+    else:
+        expect_equal(
+            metadata.get("word_count_source"),
+            "computed_from_markdown_countable_characters",
+            "word_count_source",
+        )
+        expect_equal(
+            count_markdown_characters(str(work_type), markdown_path),
+            metadata.get("word_count"),
+            "computed word_count",
+        )
 
     cache_count = downloaded_count(status.get("downloaded"))
     expect_equal(cache_count, status_item.get("downloaded_count"), "status downloaded_count")
@@ -526,6 +587,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epub", type=Path)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--title")
+    parser.add_argument("--author")
+    parser.add_argument("--compute-word-count", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     if args.check:
@@ -537,6 +601,9 @@ def parse_args() -> argparse.Namespace:
             args.epub,
             args.markdown,
             args.output,
+            args.title,
+            args.author,
+            args.compute_word_count,
             args.overwrite,
         ]
         if any(supplied):
