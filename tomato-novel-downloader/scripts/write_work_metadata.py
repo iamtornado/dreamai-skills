@@ -242,6 +242,19 @@ def downloaded_count(value: object) -> int:
     raise ValueError("status.json 的 downloaded 必须是数组或对象映射")
 
 
+def usable_status_chapter_count(status: dict) -> object:
+    """Ignore a stale release-cache count only when its own chapter map disproves it."""
+    value = status.get("chapter_count")
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError):
+        return value
+    cache_count = downloaded_count(status.get("downloaded"))
+    if cache_count > 0 and numeric != cache_count:
+        return None
+    return value
+
+
 def atomic_write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     file_descriptor, temporary_name = tempfile.mkstemp(
@@ -301,7 +314,7 @@ def build_metadata(args: argparse.Namespace) -> dict:
             )
 
     chapter_value = choose_equal(
-        "章节数", preview.get("chapter_count"), status.get("chapter_count")
+        "章节数", preview.get("chapter_count"), usable_status_chapter_count(status)
     )
     chapter_count = positive_int(chapter_value, "章节数")
     word_value = choose_equal("总字数", preview.get("word_count"), status.get("word_count"))
@@ -468,7 +481,13 @@ def check_metadata(path: Path) -> dict[str, object]:
     status = load_json(status_path)
     expect_equal(str(status.get("book_id")), book_id, "status book_id")
     expect_equal(str(preview.get("book_id")), book_id, "preview book_id")
-    expect_equal(positive_int(status.get("chapter_count"), "status chapter_count"), chapter_count, "status chapter_count")
+    status_chapters = usable_status_chapter_count(status)
+    if status_chapters is not None:
+        expect_equal(
+            positive_int(status_chapters, "status chapter_count"),
+            chapter_count,
+            "status chapter_count",
+        )
     expect_equal(positive_int(preview.get("chapter_count"), "preview chapter_count"), chapter_count, "preview chapter_count")
     expect_equal(positive_int(status.get("word_count"), "status word_count"), metadata.get("word_count"), "status word_count")
     expect_equal(positive_int(preview.get("word_count"), "preview word_count"), metadata.get("word_count"), "preview word_count")
